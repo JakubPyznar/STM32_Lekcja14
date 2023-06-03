@@ -74,13 +74,29 @@ static float calc_sound_speed(void)
 	return 331.8 + 0.6 * temp;
 }
 
+#define TIM3_PWM_PERIOD 5000
+void update_rgb(uint32_t distance)
+{
+	uint32_t distance_limited;
+	if (distance >  30) distance_limited = 30;
+	else distance_limited = distance;
+
+	uint32_t duty_red = (30 - distance_limited)/30.0 * TIM3_PWM_PERIOD;
+	uint32_t duty_green = distance_limited/30.0 * TIM3_PWM_PERIOD;
+
+	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, duty_red);
+	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, duty_green);
+}
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
 	if (htim == &htim2)
 	{
 		uint32_t start = HAL_TIM_ReadCapturedValue(&htim2, TIM_CHANNEL_1);
 		uint32_t stop = HAL_TIM_ReadCapturedValue(&htim2, TIM_CHANNEL_2);
-		seg7_show((stop-start) * calc_sound_speed() / 20000.0);
+		uint32_t distance = (stop-start) * calc_sound_speed() / 20000.0;
+		update_rgb(distance);
+		seg7_show(distance);
 	}
 	else if (htim == &htim6)
 	{
@@ -122,6 +138,7 @@ int main(void)
   MX_TIM6_Init();
   MX_ADC1_Init();
   MX_OPAMP2_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -149,6 +166,10 @@ int main(void)
   HAL_ADC_Start(&hadc1);
   HAL_OPAMP_SelfCalibrate(&hopamp2);
   HAL_OPAMP_Start(&hopamp2);
+  // inicjalizacja TIM3, ktory generuje PWM sterujacy dioda RGB (2 kanaly, kolory R i G, B niepodpiety)
+  // aktualizacja wypelnienia poszczegolnych kolorow w przerwaniu od TIM2 czyli po odczycie nowej odleglosci
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
 
   while (1)
   {
